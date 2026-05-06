@@ -1,4 +1,4 @@
--- Create products table
+-- Tabla de productos
 CREATE TABLE IF NOT EXISTS "products" (
     "id" TEXT PRIMARY KEY,
     "nombre" TEXT NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS "products" (
     "createdAt" BIGINT
 );
 
--- Create providers table
+-- Tabla de proveedores
 CREATE TABLE IF NOT EXISTS "providers" (
     "id" TEXT PRIMARY KEY,
     "nombre" TEXT NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS "providers" (
     "notas" TEXT
 );
 
--- Create movements table
+-- Tabla de movimientos
 CREATE TABLE IF NOT EXISTS "movements" (
     "id" TEXT PRIMARY KEY,
     "tipo" TEXT NOT NULL,
@@ -39,23 +39,22 @@ CREATE TABLE IF NOT EXISTS "movements" (
     "fecha" BIGINT
 );
 
--- Enable Row Level Security (optional but recommended)
+-- Nueva tabla de usuarios/empleados (para gestión futura)
+CREATE TABLE IF NOT EXISTS "app_users" (
+    "id" UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    "username" TEXT UNIQUE NOT NULL,
+    "role" TEXT DEFAULT 'empleado',
+    "created_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Habilitar RLS
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE providers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE movements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 
--- Allow anonymous access for demo (since user didn't specify auth)
-CREATE POLICY "Allow anonymous read" ON products FOR SELECT USING (true);
-CREATE POLICY "Allow anonymous insert" ON products FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow anonymous update" ON products FOR UPDATE USING (true);
-CREATE POLICY "Allow anonymous delete" ON products FOR DELETE USING (true);
-
-CREATE POLICY "Allow anonymous read" ON providers FOR SELECT USING (true);
-CREATE POLICY "Allow anonymous insert" ON providers FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow anonymous update" ON providers FOR UPDATE USING (true);
-CREATE POLICY "Allow anonymous delete" ON providers FOR DELETE USING (true);
-
-CREATE POLICY "Allow anonymous read" ON movements FOR SELECT USING (true);
-CREATE POLICY "Allow anonymous insert" ON movements FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow anonymous update" ON movements FOR UPDATE USING (true);
-CREATE POLICY "Allow anonymous delete" ON movements FOR DELETE USING (true);
+-- Políticas simples para acceso anónimo (puedes ajustarlas luego)
+CREATE POLICY "Public Access" ON products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON providers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON movements FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON app_users FOR ALL USING (true) WITH CHECK (true);
