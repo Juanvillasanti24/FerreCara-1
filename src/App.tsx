@@ -60,7 +60,7 @@ export default function App() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const validUsers = ['admin', 'Admin', 'ADMIN'];
-    const validPass = '15032000';
+    const validPass = '16121995';
 
     if (validUsers.includes(loginInput.user) && loginInput.pass === validPass) {
       const userData = { username: loginInput.user };
@@ -117,6 +117,31 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('ferrecara_db', JSON.stringify(db));
   }, [db]);
+
+  // Auto-logout after 5 minutes of inactivity
+  useEffect(() => {
+    if (!user) return;
+
+    let timeout: ReturnType<typeof setTimeout>;
+
+    const resetTimer = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        handleLogout();
+        showToast('Sesión cerrada por inactividad');
+      }, 5 * 60 * 1000); // 5 minutes
+    };
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => document.addEventListener(event, resetTimer));
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeout);
+      events.forEach(event => document.removeEventListener(event, resetTimer));
+    };
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('ferrecara_sync_queue', JSON.stringify(syncQueue));
