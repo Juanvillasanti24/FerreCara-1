@@ -1,0 +1,6 @@
+{
+  "name": "FerreCara Inventario",
+  "description": "Una aplicación PWA robusta para la gestión de inventario offline para ferreterías.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
