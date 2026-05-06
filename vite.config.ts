@@ -7,7 +7,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    base: mode === 'production' ? './' : '/',
+    base: './',
     plugins: [
       react(), 
       tailwindcss(),
@@ -21,6 +21,8 @@ export default defineConfig(({mode}) => {
           background_color: '#051424',
           display: 'standalone',
           orientation: 'portrait',
+          start_url: '.',
+          scope: '.',
           icons: [
             {
               src: 'https://cdn-icons-png.flaticon.com/512/3062/3062331.png',

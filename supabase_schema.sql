@@ -53,7 +53,13 @@ ALTER TABLE providers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE movements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 
--- Políticas simples para acceso anónimo (puedes ajustarlas luego)
+-- Eliminar políticas si existen para evitar errores al re-ejecutar
+DROP POLICY IF EXISTS "Public Access" ON products;
+DROP POLICY IF EXISTS "Public Access" ON providers;
+DROP POLICY IF EXISTS "Public Access" ON movements;
+DROP POLICY IF EXISTS "Public Access" ON app_users;
+
+-- Crear políticas de acceso público
 CREATE POLICY "Public Access" ON products FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Access" ON providers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Access" ON movements FOR ALL USING (true) WITH CHECK (true);
