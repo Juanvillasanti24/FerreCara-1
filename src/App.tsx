@@ -289,7 +289,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#051424] text-[#d4e4fa] font-sans selection:bg-orange-500/30">
       {/* Top Bar */}
-      <header className="fixed top-0 left-0 right-0 h-14 z-50 flex items-center justify-between px-4 bg-[#051424]/80 backdrop-blur-md border-b border-white/5">
+      <header className="fixed top-0 left-0 right-0 h-16 pt-[env(safe-area-inset-top)] z-50 flex items-center justify-between px-4 bg-[#051424]/90 backdrop-blur-xl border-b border-white/5">
         <button 
           onClick={() => setIsSidebarOpen(true)}
           className="p-2 hover:bg-white/5 rounded-full transition-colors active:scale-90"
@@ -363,7 +363,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="pt-14 pb-20 px-4 max-w-lg mx-auto w-full overflow-x-hidden">
+      <main className="pt-20 pb-24 px-4 max-w-lg mx-auto w-full overflow-x-hidden">
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && (
             <motion.div 
@@ -477,15 +477,15 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="py-4 space-y-4"
             >
-              <div className="sticky top-14 bg-[#051424] z-20 py-2 space-y-3">
+              <div className="sticky top-16 bg-[#051424] z-20 py-3 space-y-3 -mx-4 px-4 shadow-lg shadow-[#051424]/50">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input 
                     type="text" 
                     placeholder="Buscar SKU o nombre..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full h-12 pl-10 bg-[#0d1c2d] border border-white/5 rounded-xl text-sm focus:border-orange-400 transition-colors bg-transparent outline-none"
+                    className="w-full h-12 pl-10 bg-[#0d1c2d] border border-white/10 rounded-xl text-sm focus:border-orange-500 transition-colors outline-none text-white placeholder:text-gray-600"
                   />
                 </div>
                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
@@ -494,10 +494,10 @@ export default function App() {
                       key={c}
                       onClick={() => setCategoryFilter(c)}
                       className={cn(
-                        "px-4 h-9 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border transition-all",
+                        "px-5 h-9 rounded-full text-[11px] font-bold uppercase tracking-wider whitespace-nowrap border transition-all",
                         c === categoryFilter 
-                          ? "bg-orange-500 border-orange-500 text-white" 
-                          : "bg-[#122131] border-white/5 text-gray-400"
+                          ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20" 
+                          : "bg-[#122131] border-white/5 text-gray-500 hover:text-gray-300"
                       )}
                     >
                       {c}
@@ -506,7 +506,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="space-y-3 pb-24">
+              <div className="space-y-4 pt-4 pb-32">
                 {filteredProducts.length === 0 ? (
                   <div className="text-center py-20 opacity-30">
                     <Package className="w-16 h-16 mx-auto mb-4" />
@@ -517,16 +517,16 @@ export default function App() {
                     <div 
                       key={p.id} 
                       onClick={() => setIsDetailOpen(p)}
-                      className="bg-[#122131] border border-white/5 p-4 rounded-2xl flex items-start gap-4 active:scale-[0.98] transition-transform cursor-pointer"
+                      className="bg-[#122131] border border-white/5 p-4 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition-transform cursor-pointer hover:bg-[#1c2b3c]/50"
                     >
-                      <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <Package className="w-6 h-6 text-gray-500" />
+                      <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Package className="w-7 h-7 text-gray-500" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-bold text-sm leading-tight mb-1">{p.nombre}</h4>
-                            <p className="text-[10px] text-gray-400">SKU: {p.sku}</p>
+                      <div className="flex-1 min-w-0 py-1">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-sm leading-tight text-white truncate">{p.nombre}</h4>
+                            <p className="text-[10px] text-gray-500 mt-0.5">SKU: {p.sku}</p>
                           </div>
                           <div className="flex gap-1">
                             <button 
