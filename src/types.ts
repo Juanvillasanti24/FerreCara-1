@@ -47,6 +47,14 @@ export interface AppState {
   movimientos: Movement[];
 }
 
+export interface SyncItem {
+  id: string;
+  table: 'products' | 'providers' | 'movements';
+  action: 'upsert' | 'delete' | 'insert' | 'update';
+  payload: any;
+  timestamp: number;
+}
+
 export const CATEGORIES = [
   'Herramientas',
   'Electricidad',

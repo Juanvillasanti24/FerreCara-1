@@ -34,20 +34,58 @@ import {
   Product, 
   Movement, 
   Provider, 
-  CATEGORIES 
+  CATEGORIES,
+  SyncItem
 } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+
+import { supabase } from './lib/supabase';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export default function App() {
-  const [db, setDb] = useState<AppState>(() => {
-    const saved = localStorage.getItem('ferrecara_v1');
-    return saved ? JSON.parse(saved) : INITIAL_DATA;
+  const [user, setUser] = useState<{ username: string } | null>(() => {
+    const saved = localStorage.getItem('ferrecara_user');
+    return saved ? JSON.parse(saved) : null;
   });
+  const [loginInput, setLoginInput] = useState({ user: '', pass: '' });
+  const [db, setDb] = useState<AppState>(() => {
+    const saved = localStorage.getItem('ferrecara_db');
+    return saved ? JSON.parse(saved) : { productos: [], proveedores: [], movimientos: [] };
+  });
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const validUsers = ['admin', 'Admin', 'ADMIN'];
+    const validPass = '15032000';
+
+    if (validUsers.includes(loginInput.user) && loginInput.pass === validPass) {
+      const userData = { username: loginInput.user };
+      setUser(userData);
+      localStorage.setItem('ferrecara_user', JSON.stringify(userData));
+      setLoginInput({ user: '', pass: '' }); // Limpiar campos tras éxito
+      showToast('Bienvenido, ' + loginInput.user);
+    } else {
+      showToast('Credenciales incorrectas');
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('ferrecara_user');
+    setLoginInput({ user: '', pass: '' }); // Limpiar campos al salir
+    showToast('Sesión cerrada');
+  };
+  const [syncQueue, setSyncQueue] = useState<SyncItem[]>(() => {
+    const saved = localStorage.getItem('ferrecara_sync_queue');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'productos' | 'movimientos' | 'proveedores'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -75,10 +113,161 @@ export default function App() {
   const [movMotivo, setMovMotivo] = useState('Venta');
   const [movResp, setMovResp] = useState('');
 
-  // Sync with LocalStorage
+  // Sync to LocalStorage
   useEffect(() => {
-    localStorage.setItem('ferrecara_v1', JSON.stringify(db));
+    localStorage.setItem('ferrecara_db', JSON.stringify(db));
   }, [db]);
+
+  useEffect(() => {
+    localStorage.setItem('ferrecara_sync_queue', JSON.stringify(syncQueue));
+  }, [syncQueue]);
+
+  // Online status monitoring
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToast('En línea - Sincronizando datos...');
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToast('Sin conexión - Cambios se guardarán localmente');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Supabase Fetch & Sync
+  const fetchData = async () => {
+    if (!navigator.onLine) {
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      const { data: prods, error: e1 } = await supabase.from('products').select('*');
+      const { data: provs, error: e2 } = await supabase.from('providers').select('*');
+      const { data: movs, error: e3 } = await supabase.from('movements').select('*').order('fecha', { ascending: false });
+
+      if (e1 || e2 || e3) {
+        console.error('Fetch error:', e1 || e2 || e3);
+      }
+
+      if (prods?.length || provs?.length || movs?.length) {
+        setDb(prev => {
+          // Si no hay cambios locales pendientes, sobreescribimos
+          if (syncQueue.length === 0) {
+            return {
+              productos: prods || [],
+              proveedores: provs || [],
+              movimientos: movs || []
+            };
+          }
+          // Si hay cambios locales, intentamos mezclarlos (mantenemos los locales por ID si están en la cola)
+          const localPropIds = new Set(syncQueue.map(i => i.payload?.id || (i as any).filters?.id));
+          
+          return {
+            productos: [
+              ...(prods || []).filter(p => !localPropIds.has(p.id)),
+              ...prev.productos.filter(p => localPropIds.has(p.id))
+            ],
+            proveedores: [
+              ...(provs || []).filter(p => !localPropIds.has(p.id)),
+              ...prev.proveedores.filter(p => localPropIds.has(p.id))
+            ],
+            movimientos: [
+              ...(movs || []).filter(p => !localPropIds.has(p.id)),
+              ...prev.movimientos.filter(p => localPropIds.has(p.id))
+            ]
+          };
+        });
+      } else if (db.productos.length === 0 && syncQueue.length === 0) {
+        // No hay datos en la nube ni localmente
+        setDb(INITIAL_DATA);
+      }
+    } catch (err) {
+      console.error('Initial fetch exception:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    // Real-time subscriptions
+    const productsSub = supabase.channel('products-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, fetchData)
+      .subscribe();
+
+    const providersSub = supabase.channel('providers-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'providers' }, fetchData)
+      .subscribe();
+
+    const movementsSub = supabase.channel('movements-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'movements' }, fetchData)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(productsSub);
+      supabase.removeChannel(providersSub);
+      supabase.removeChannel(movementsSub);
+    };
+  }, []);
+
+  // Sync Queue Processor
+  const addToSyncQueue = (table: SyncItem['table'], action: SyncItem['action'], payload: any, filters?: any) => {
+    const newItem: SyncItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      table,
+      action,
+      payload,
+      timestamp: Date.now(),
+    };
+    if (filters) (newItem as any).filters = filters;
+    setSyncQueue(prev => [...prev, newItem]);
+  };
+
+  const processSyncQueue = async () => {
+    if (!navigator.onLine || syncQueue.length === 0 || isSyncing) return;
+
+    setIsSyncing(true);
+    const item = syncQueue[0];
+
+    try {
+      let error;
+      if (item.action === 'upsert') {
+        ({ error } = await supabase.from(item.table).upsert(item.payload));
+      } else if (item.action === 'insert') {
+        ({ error } = await supabase.from(item.table).insert(item.payload));
+      } else if (item.action === 'update') {
+        ({ error } = await supabase.from(item.table).update(item.payload).match((item as any).filters || {}));
+      } else if (item.action === 'delete') {
+        ({ error } = await supabase.from(item.table).delete().match((item as any).filters || {}));
+      }
+
+      if (!error) {
+        setSyncQueue(prev => prev.filter(x => x.id !== item.id));
+      } else {
+        // Si hay un error, esperamos un poco antes de reintentar
+        console.error('Sync error:', error);
+      }
+    } catch (err) {
+      console.error('Sync exception:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOnline && syncQueue.length > 0) {
+      const timer = setTimeout(processSyncQueue, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOnline, syncQueue, isSyncing]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -105,73 +294,103 @@ export default function App() {
     return { totalVal, lowStock, history };
   }, [db]);
 
-  const handleSaveProduct = (p: Partial<Product>) => {
+  const handleSaveProduct = async (p: Partial<Product>) => {
     if (!p.nombre) {
       showToast('El nombre es obligatorio');
       return;
     }
 
-    setDb(prev => {
-      const exists = prev.productos.find(x => x.id === p.id);
-      if (exists) {
-        return {
-          ...prev,
-          productos: prev.productos.map(x => x.id === p.id ? { ...x, ...p, createdAt: Date.now() } as Product : x)
-        };
-      } else {
-        const id = '_' + Math.random().toString(36).substr(2, 9);
-        const newProd = {
-          ...p,
-          id,
-          sku: p.sku || '',
-          stock: p.stock || 0,
-          sMin: p.sMin || 5,
-          precio: p.precio || 0,
-          costo: p.costo || 0,
-          categoria: p.categoria || 'General',
-          createdAt: Date.now()
-        } as Product;
-        return {
-          ...prev,
-          productos: [newProd, ...prev.productos]
-        };
-      }
-    });
-    setEditingProduct(null);
-    showToast('Producto guardado');
+    try {
+      const id = p.id || Math.random().toString(36).substr(2, 9);
+      const dataToSave = {
+        id,
+        nombre: p.nombre,
+        sku: p.sku || '',
+        categoria: p.categoria || 'General',
+        stock: p.stock || 0,
+        sMin: p.sMin || 5,
+        precio: p.precio || 0,
+        costo: p.costo || 0,
+        ubic: p.ubic || '',
+        prov: p.prov || '',
+        desc: p.desc || '',
+        createdAt: Date.now()
+      };
+
+      // 1. Actualizar estado local inmediatamente
+      setDb(prev => {
+        const exists = prev.productos.find(x => x.id === id);
+        if (exists) {
+          return {
+            ...prev,
+            productos: prev.productos.map(x => x.id === id ? dataToSave as Product : x)
+          };
+        } else {
+          return {
+            ...prev,
+            productos: [dataToSave as Product, ...prev.productos]
+          };
+        }
+      });
+
+      // 2. Encolar para sincronización
+      addToSyncQueue('products', 'upsert', dataToSave);
+
+      setEditingProduct(null);
+      showToast(isOnline ? 'Producto guardado' : 'Guardado localmente (se sincronizará al conectar)');
+    } catch (err: any) {
+      showToast(`Error: ${err.message || 'No se pudo guardar'}`);
+      console.error(err);
+    }
   };
 
-  const handleSaveProvider = (s: Partial<Provider>) => {
+  const handleSaveProvider = async (s: Partial<Provider>) => {
     if (!s.nombre) {
       showToast('Nombre es obligatorio');
       return;
     }
 
-    setDb(prev => {
-      const exists = prev.proveedores.find(x => x.id === s.id);
-      if (exists) {
-        return {
-          ...prev,
-          proveedores: prev.proveedores.map(x => x.id === s.id ? { ...x, ...s } as Provider : x)
-        };
-      } else {
-        const id = '_' + Math.random().toString(36).substr(2, 9);
-        const newProv = {
-          ...s,
-          id,
-          cat: s.cat || 'General'
-        } as Provider;
-        return {
-          ...prev,
-          proveedores: [newProv, ...prev.proveedores]
-        };
-      }
-    });
-    setEditingProvider(null);
-    showToast('Proveedor guardado');
+    try {
+      const id = s.id || Math.random().toString(36).substr(2, 9);
+      const dataToSave = {
+        id,
+        nombre: s.nombre,
+        cont: s.cont || '',
+        tel: s.tel || '',
+        email: s.email || '',
+        cat: s.cat || 'General',
+        prods: s.prods || '',
+        notas: s.notas || ''
+      };
+
+      // 1. Actualizar estado local inmediatamente
+      setDb(prev => {
+        const exists = prev.proveedores.find(x => x.id === id);
+        if (exists) {
+          return {
+            ...prev,
+            proveedores: prev.proveedores.map(x => x.id === id ? dataToSave as Provider : x)
+          };
+        } else {
+          return {
+            ...prev,
+            proveedores: [dataToSave as Provider, ...prev.proveedores]
+          };
+        }
+      });
+
+      // 2. Encolar para sincronización
+      addToSyncQueue('providers', 'upsert', dataToSave);
+
+      setEditingProvider(null);
+      showToast(isOnline ? 'Proveedor guardado' : 'Guardado localmente (se sincronizará al conectar)');
+    } catch (err: any) {
+      showToast(`Error: ${err.message || 'No se pudo guardar'}`);
+      console.error(err);
+    }
   };
 
-  const handleRegisterMov = () => {
+  const handleRegisterMov = async () => {
     if (!selectedMovProduct) {
       showToast('Seleccione un producto');
       return;
@@ -187,47 +406,67 @@ export default function App() {
       return;
     }
 
-    const movId = '_' + Math.random().toString(36).substr(2, 9);
-    const newMov: Movement = {
-      id: movId,
-      tipo: movType,
-      pId: selectedMovProduct.id,
-      pNombre: selectedMovProduct.nombre,
-      sku: selectedMovProduct.sku,
-      cant,
-      motivo: movMotivo,
-      resp: movResp || 'Sistema',
-      fecha: Date.now()
-    };
+    try {
+      const movId = Math.random().toString(36).substr(2, 9);
+      const newMov: Movement = {
+        id: movId,
+        tipo: movType,
+        pId: selectedMovProduct.id,
+        pNombre: selectedMovProduct.nombre,
+        sku: selectedMovProduct.sku || '',
+        cant,
+        motivo: movMotivo,
+        resp: movResp || 'Sistema',
+        fecha: Date.now()
+      };
 
-    setDb(prev => ({
-      ...prev,
-      movimientos: [newMov, ...prev.movimientos],
-      productos: prev.productos.map(p => 
-        p.id === selectedMovProduct.id 
-          ? { ...p, stock: p.stock + (movType === 'entrada' ? cant : -cant) }
-          : p
-      )
-    }));
+      const newStock = selectedMovProduct.stock + (movType === 'entrada' ? cant : -cant);
 
-    setMovCant('');
-    setSelectedMovProduct(null);
-    setMovSearch('');
-    showToast('Movimiento registrado');
+      // 1. Actualizar estado local inmediatamente
+      setDb(prev => ({
+        ...prev,
+        movimientos: [newMov, ...prev.movimientos],
+        productos: prev.productos.map(p => 
+          p.id === selectedMovProduct.id ? { ...p, stock: newStock } : p
+        )
+      }));
+
+      // 2. Encolar para sincronización (tanto el movimiento como el nuevo stock)
+      addToSyncQueue('movements', 'insert', newMov);
+      addToSyncQueue('products', 'update', { stock: newStock }, { id: selectedMovProduct.id });
+
+      setMovCant('');
+      setSelectedMovProduct(null);
+      setMovSearch('');
+      showToast(isOnline ? 'Movimiento registrado' : 'Registrado localmente');
+    } catch (err: any) {
+      showToast(`Error: ${err.message || 'No se pudo registrar'}`);
+      console.error(err);
+    }
   };
 
   const handleDeleteProduct = (id: string) => {
     setConfirmModal({
       title: '¿Eliminar producto?',
       message: '¿Estás seguro de eliminar este producto? Se eliminarán también sus movimientos.',
-      onConfirm: () => {
-        setDb(prev => ({
-          ...prev,
-          productos: prev.productos.filter(p => p.id !== id),
-          movimientos: prev.movimientos.filter(m => m.pId !== id)
-        }));
-        showToast('Producto eliminado');
-        setConfirmModal(null);
+      onConfirm: async () => {
+        try {
+          // 1. Actualizar estado local inmediatamente
+          setDb(prev => ({
+            ...prev,
+            productos: prev.productos.filter(p => p.id !== id),
+            movimientos: prev.movimientos.filter(m => m.pId !== id)
+          }));
+
+          // 2. Encolar para sincronización
+          // Nota: El delete cascade en Supabase se encargará de los movimientos si está configurado en SQL.
+          addToSyncQueue('products', 'delete', null, { id });
+
+          showToast(isOnline ? 'Producto eliminado' : 'Eliminado localmente');
+          setConfirmModal(null);
+        } catch (err) {
+          showToast('Error al eliminar');
+        }
       }
     });
   };
@@ -236,42 +475,70 @@ export default function App() {
     setConfirmModal({
       title: '¿Eliminar proveedor?',
       message: '¿Estás seguro de eliminar este proveedor?',
-      onConfirm: () => {
-        setDb(prev => ({
-          ...prev,
-          proveedores: prev.proveedores.filter(p => p.id !== id)
-        }));
-        showToast('Proveedor eliminado');
-        setConfirmModal(null);
+      onConfirm: async () => {
+        try {
+          // 1. Actualizar estado local inmediatamente
+          setDb(prev => ({
+            ...prev,
+            proveedores: prev.proveedores.filter(p => p.id !== id)
+          }));
+
+          // 2. Encolar para sincronización
+          addToSyncQueue('providers', 'delete', null, { id });
+
+          showToast(isOnline ? 'Proveedor eliminado' : 'Eliminado localmente');
+          setConfirmModal(null);
+        } catch (err) {
+          showToast('Error al eliminar');
+        }
       }
     });
   };
 
-  const handleSaveMovement = (m: Movement) => {
-    setDb(prev => ({
-      ...prev,
-      movimientos: prev.movimientos.map(x => x.id === m.id ? m : x)
-    }));
-    setEditingMovement(null);
-    showToast('Movimiento actualizado');
+  const handleSaveMovement = async (m: Movement) => {
+    try {
+      // 1. Local update
+      setDb(prev => ({
+        ...prev,
+        movimientos: prev.movimientos.map(x => x.id === m.id ? m : x)
+      }));
+
+      // 2. Queue
+      addToSyncQueue('movements', 'upsert', m);
+
+      setEditingMovement(null);
+      showToast('Movimiento actualizado');
+    } catch (err) {
+      showToast('Error al actualizar');
+    }
   };
 
   const handleDeleteMovement = (mov: Movement) => {
     setConfirmModal({
       title: '¿Eliminar registro?',
       message: '¿Deseas eliminar este registro? El stock volverá a su estado anterior.',
-      onConfirm: () => {
-        setDb(prev => ({
-          ...prev,
-          movimientos: prev.movimientos.filter(m => m.id !== mov.id),
-          productos: prev.productos.map(p => 
-            p.id === mov.pId 
-              ? { ...p, stock: p.stock + (mov.tipo === 'entrada' ? -mov.cant : mov.cant) }
-              : p
-          )
-        }));
-        showToast('Movimiento revertido');
-        setConfirmModal(null);
+      onConfirm: async () => {
+        try {
+          const revertedStock = (db.productos.find(p => p.id === mov.pId)?.stock || 0) + (mov.tipo === 'entrada' ? -mov.cant : mov.cant);
+          
+          // 1. Local update
+          setDb(prev => ({
+            ...prev,
+            movimientos: prev.movimientos.filter(m => m.id !== mov.id),
+            productos: prev.productos.map(p => 
+              p.id === mov.pId ? { ...p, stock: revertedStock } : p
+            )
+          }));
+          
+          // 2. Queue
+          addToSyncQueue('products', 'update', { stock: revertedStock }, { id: mov.pId });
+          addToSyncQueue('movements', 'delete', null, { id: mov.id });
+
+          showToast('Movimiento revertido');
+          setConfirmModal(null);
+        } catch (err) {
+          showToast('Error al revertir');
+        }
       }
     });
   };
@@ -293,6 +560,71 @@ export default function App() {
     ).slice(0, 5);
   }, [db.productos, movSearch, selectedMovProduct]);
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#051424] flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md bg-[#0a1f35] border border-white/10 rounded-2xl p-8 shadow-2xl"
+        >
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(249,115,22,0.4)]">
+              <Package className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Ferrecara Control</h1>
+            <p className="text-gray-400 text-sm mt-1">Ingresa tus credenciales para continuar</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Usuario</label>
+              <input
+                type="text"
+                value={loginInput.user}
+                onChange={(e) => setLoginInput({ ...loginInput, user: e.target.value })}
+                className="w-full bg-[#051424] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition-colors"
+                placeholder="Admin"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Contraseña</label>
+              <input
+                type="password"
+                value={loginInput.pass}
+                onChange={(e) => setLoginInput({ ...loginInput, pass: e.target.value })}
+                className="w-full bg-[#051424] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition-colors"
+                placeholder="••••••••"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
+            >
+              Iniciar Sesión
+            </button>
+          </form>
+          
+          <div className="mt-8 text-center">
+            <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em]">Sistema de Inventario V1.5</p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#051424] flex items-center justify-center">
+        <motion.div 
+          animate={{ scale: [1, 1.1, 1], rotate: [0, 180, 360] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+          className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#051424] text-[#d4e4fa] font-sans selection:bg-orange-500/30">
       {/* Top Bar */}
@@ -307,12 +639,45 @@ export default function App() {
           <h1 className="text-lg font-black tracking-tighter italic text-white leading-none">FerreCara</h1>
           <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-orange-500 mt-0.5">Inventory Professional</span>
         </div>
-        <button 
-          onClick={() => showToast('Dispositivo Sincronizado')}
-          className="p-2 hover:bg-white/5 rounded-full transition-colors group"
-        >
-          <Cloud className="w-5 h-5 text-emerald-500 group-active:scale-90 transition-transform" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleLogout}
+            className="p-2 hover:bg-white/5 rounded-full transition-colors group mr-1"
+            title="Cerrar Sesión"
+          >
+            <span className="text-[10px] font-bold text-gray-500 mr-2 uppercase tracking-widest hidden sm:inline">{user?.username}</span>
+            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-red-500/10 transition-colors">
+              <LogOut className="w-4 h-4 text-gray-400 group-hover:text-red-500" />
+            </div>
+          </button>
+          <button 
+            onClick={() => {
+              if (!isOnline) {
+                showToast('Sin conexión a Internet');
+              } else if (syncQueue.length > 0) {
+                showToast(`Sincronizando ${syncQueue.length} cambios...`);
+                processSyncQueue();
+              } else {
+                showToast('Sistema al día');
+              }
+            }}
+            className="p-2 hover:bg-white/5 rounded-full transition-colors group relative"
+          >
+            {syncQueue.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 text-[8px] font-bold items-center justify-center text-white">
+                  {syncQueue.length}
+                </span>
+              </span>
+            )}
+            <Cloud className={cn(
+              "w-5 h-5 transition-all",
+              !isOnline ? "text-gray-600" : syncQueue.length > 0 ? "text-orange-400" : "text-emerald-500",
+              isSyncing && "animate-bounce"
+            )} />
+          </button>
+        </div>
       </header>
 
       {/* Sidebar Overlay */}
