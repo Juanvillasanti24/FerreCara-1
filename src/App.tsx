@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   Package, 
@@ -425,7 +425,6 @@ export default function App() {
       showToast('Cantidad inválida');
       return;
     }
-
     if (movType === 'salida' && cant > selectedMovProduct.stock) {
       showToast('Stock insuficiente');
       return;
@@ -1027,14 +1026,18 @@ export default function App() {
                         {movSearchResults.map(p => (
                           <button 
                             key={p.id}
-                            onClick={() => setSelectedMovProduct(p)}
+                            onClick={() => {
+                              setSelectedMovProduct(p);
+                            }}
                             className="w-full p-3 text-left hover:bg-white/5 flex items-center justify-between border-b border-white/5 last:border-0"
                           >
                             <div>
                               <div className="text-sm font-bold">{p.nombre}</div>
                               <div className="text-[10px] text-gray-400">SKU: {p.sku}</div>
                             </div>
-                            <div className="text-xs font-bold text-gray-400">{p.stock} u.</div>
+                            <div className="text-xs font-bold text-gray-400">
+                              {p.stock} u.
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -1334,15 +1337,6 @@ export default function App() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">SKU (Opcional)</label>
-                    <input 
-                      className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none"
-                      placeholder="Ej: SKU-001"
-                      value={editingProduct.sku || ''}
-                      onChange={e => setEditingProduct({...editingProduct, sku: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">Categoría</label>
                     <select 
                       className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none appearance-none"
@@ -1352,8 +1346,26 @@ export default function App() {
                       {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">SKU (Opcional)</label>
+                    <input 
+                      className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none"
+                      placeholder="Ej: SKU-001"
+                      value={editingProduct.sku || ''}
+                      onChange={e => setEditingProduct({...editingProduct, sku: e.target.value})}
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">Ubicación</label>
+                    <input 
+                      className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none"
+                      placeholder="Ej: Estante A1"
+                      value={editingProduct.ubic || ''}
+                      onChange={e => setEditingProduct({...editingProduct, ubic: e.target.value})}
+                    />
+                  </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">Stock Actual</label>
                     <input 
@@ -1363,6 +1375,8 @@ export default function App() {
                       onChange={e => setEditingProduct({...editingProduct, stock: e.target.value === '' ? undefined : parseInt(e.target.value)})}
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">Stock Mínimo</label>
                     <input 
@@ -1372,8 +1386,6 @@ export default function App() {
                       onChange={e => setEditingProduct({...editingProduct, sMin: e.target.value === '' ? undefined : parseInt(e.target.value)})}
                     />
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">Precio Venta (Gs.)</label>
                     <input 
