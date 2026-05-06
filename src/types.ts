@@ -15,6 +15,7 @@ export interface Product {
   ubic?: string;
   prov?: string;
   desc?: string;
+  createdAt?: number;
 }
 
 export interface Provider {

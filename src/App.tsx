@@ -106,8 +106,8 @@ export default function App() {
   }, [db]);
 
   const handleSaveProduct = (p: Partial<Product>) => {
-    if (!p.nombre || !p.sku) {
-      showToast('Nombre y SKU son obligatorios');
+    if (!p.nombre) {
+      showToast('El nombre es obligatorio');
       return;
     }
 
@@ -116,18 +116,20 @@ export default function App() {
       if (exists) {
         return {
           ...prev,
-          productos: prev.productos.map(x => x.id === p.id ? { ...x, ...p } as Product : x)
+          productos: prev.productos.map(x => x.id === p.id ? { ...x, ...p, createdAt: Date.now() } as Product : x)
         };
       } else {
         const id = '_' + Math.random().toString(36).substr(2, 9);
         const newProd = {
           ...p,
           id,
+          sku: p.sku || '',
           stock: p.stock || 0,
           sMin: p.sMin || 5,
           precio: p.precio || 0,
           costo: p.costo || 0,
-          categoria: p.categoria || 'General'
+          categoria: p.categoria || 'General',
+          createdAt: Date.now()
         } as Product;
         return {
           ...prev,
@@ -277,7 +279,7 @@ export default function App() {
   const filteredProducts = useMemo(() => {
     return db.productos.filter(p => {
       const matchesSearch = p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           p.sku.toLowerCase().includes(searchQuery.toLowerCase());
+                           (p.sku || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCat = categoryFilter === 'Todos' || p.categoria === categoryFilter;
       return matchesSearch && matchesCat;
     });
@@ -287,7 +289,7 @@ export default function App() {
     if (!movSearch || selectedMovProduct) return [];
     return db.productos.filter(p => 
       p.nombre.toLowerCase().includes(movSearch.toLowerCase()) || 
-      p.sku.toLowerCase().includes(movSearch.toLowerCase())
+      (p.sku || '').toLowerCase().includes(movSearch.toLowerCase())
     ).slice(0, 5);
   }, [db.productos, movSearch, selectedMovProduct]);
 
@@ -724,7 +726,7 @@ export default function App() {
                          <div>
                            <div className="text-sm font-bold leading-tight">{m.pNombre}</div>
                            <div className="text-[10px] text-gray-500">
-                            {new Date(m.fecha).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })} · {m.motivo}
+                            {new Date(m.fecha).toLocaleString('es-PY', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })} · {m.motivo}
                            </div>
                          </div>
                        </div>
@@ -942,10 +944,10 @@ export default function App() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">SKU</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">SKU (Opcional)</label>
                     <input 
                       className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none"
-                      placeholder="SKU-001"
+                      placeholder="Ej: SKU-001"
                       value={editingProduct.sku || ''}
                       onChange={e => setEditingProduct({...editingProduct, sku: e.target.value})}
                     />
@@ -967,8 +969,8 @@ export default function App() {
                     <input 
                       type="number"
                       className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none"
-                      value={editingProduct.stock || 0}
-                      onChange={e => setEditingProduct({...editingProduct, stock: parseInt(e.target.value) || 0})}
+                      value={editingProduct.stock ?? ''}
+                      onChange={e => setEditingProduct({...editingProduct, stock: e.target.value === '' ? undefined : parseInt(e.target.value)})}
                     />
                   </div>
                   <div className="space-y-1">
@@ -976,8 +978,8 @@ export default function App() {
                     <input 
                       type="number"
                       className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none"
-                      value={editingProduct.sMin || 0}
-                      onChange={e => setEditingProduct({...editingProduct, sMin: parseInt(e.target.value) || 0})}
+                      value={editingProduct.sMin ?? ''}
+                      onChange={e => setEditingProduct({...editingProduct, sMin: e.target.value === '' ? undefined : parseInt(e.target.value)})}
                     />
                   </div>
                 </div>
@@ -987,8 +989,8 @@ export default function App() {
                     <input 
                       type="number"
                       className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none text-orange-400 font-bold"
-                      value={editingProduct.precio || 0}
-                      onChange={e => setEditingProduct({...editingProduct, precio: parseInt(e.target.value) || 0})}
+                      value={editingProduct.precio ?? ''}
+                      onChange={e => setEditingProduct({...editingProduct, precio: e.target.value === '' ? undefined : parseInt(e.target.value)})}
                     />
                   </div>
                   <div className="space-y-1">
@@ -996,8 +998,8 @@ export default function App() {
                     <input 
                       type="number"
                       className="w-full h-12 px-4 bg-white/5 border border-white/5 rounded-xl outline-none"
-                      value={editingProduct.costo || 0}
-                      onChange={e => setEditingProduct({...editingProduct, costo: parseInt(e.target.value) || 0})}
+                      value={editingProduct.costo ?? ''}
+                      onChange={e => setEditingProduct({...editingProduct, costo: e.target.value === '' ? undefined : parseInt(e.target.value)})}
                     />
                   </div>
                 </div>
@@ -1103,6 +1105,17 @@ export default function App() {
                 <div>
                   <h3 className="text-xl font-bold">{isDetailOpen.nombre}</h3>
                   <p className="text-xs text-gray-500">SKU: {isDetailOpen.sku} · {isDetailOpen.categoria}</p>
+                  {isDetailOpen.createdAt && (
+                    <p className="text-[10px] text-gray-600 mt-1 italic">
+                      Última modificación: {new Date(isDetailOpen.createdAt).toLocaleString('es-PY', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  )}
                 </div>
                 <button onClick={() => setIsDetailOpen(null)} className="p-2 hover:bg-white/5 rounded-full"><X className="w-5 h-5"/></button>
               </div>
