@@ -12,7 +12,10 @@ import {
   TrendingUp,
   AlertTriangle,
   History,
-  X
+  X,
+  Lock,
+  User as UserIcon,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -102,7 +105,6 @@ export default function App() {
     return { totalVal, lowStock, history };
   }, [db]);
 
-  // Handlers
   const handleSaveProduct = (p: Partial<Product>) => {
     if (!p.nombre || !p.sku) {
       showToast('Nombre y SKU son obligatorios');
@@ -117,9 +119,10 @@ export default function App() {
           productos: prev.productos.map(x => x.id === p.id ? { ...x, ...p } as Product : x)
         };
       } else {
+        const id = '_' + Math.random().toString(36).substr(2, 9);
         const newProd = {
           ...p,
-          id: '_' + Math.random().toString(36).substr(2, 9),
+          id,
           stock: p.stock || 0,
           sMin: p.sMin || 5,
           precio: p.precio || 0,
@@ -150,9 +153,10 @@ export default function App() {
           proveedores: prev.proveedores.map(x => x.id === s.id ? { ...x, ...s } as Provider : x)
         };
       } else {
+        const id = '_' + Math.random().toString(36).substr(2, 9);
         const newProv = {
           ...s,
-          id: '_' + Math.random().toString(36).substr(2, 9),
+          id,
           cat: s.cat || 'General'
         } as Provider;
         return {
@@ -181,8 +185,9 @@ export default function App() {
       return;
     }
 
+    const movId = '_' + Math.random().toString(36).substr(2, 9);
     const newMov: Movement = {
-      id: '_' + Math.random().toString(36).substr(2, 9),
+      id: movId,
       tipo: movType,
       pId: selectedMovProduct.id,
       pNombre: selectedMovProduct.nombre,
@@ -294,9 +299,12 @@ export default function App() {
           onClick={() => setIsSidebarOpen(true)}
           className="p-2 hover:bg-white/5 rounded-full transition-colors active:scale-90"
         >
-          <Menu className="w-5 h-5 text-gray-400" />
+          <Menu className="w-6 h-6 text-gray-400" />
         </button>
-        <h1 className="text-lg font-bold text-orange-400 tracking-tight">FerreCara</h1>
+        <div className="flex flex-col items-center">
+          <h1 className="text-lg font-black tracking-tighter italic text-white leading-none">FerreCara</h1>
+          <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-orange-500 mt-0.5">Inventory Professional</span>
+        </div>
         <button 
           onClick={() => showToast('Dispositivo Sincronizado')}
           className="p-2 hover:bg-white/5 rounded-full transition-colors group"
@@ -323,13 +331,15 @@ export default function App() {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed top-0 left-0 bottom-0 w-64 bg-[#0d1c2d] z-[70] border-r border-white/5 shadow-2xl flex flex-col"
             >
-              <div className="p-6 border-b border-white/5 flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center">
-                  <Package className="w-6 h-6 text-orange-400" />
-                </div>
-                <div>
-                  <div className="font-bold">FerreCara</div>
-                  <div className="text-xs text-gray-400">Offline Inventory</div>
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                    <Package className="w-6 h-6 text-orange-400" />
+                  </div>
+                  <div>
+                    <div className="font-bold">FerreCara</div>
+                    <div className="text-xs text-gray-400">Local System</div>
+                  </div>
                 </div>
               </div>
               <nav className="flex-1 p-4 space-y-2">
@@ -363,7 +373,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="pt-20 pb-24 px-4 max-w-lg mx-auto w-full overflow-x-hidden">
+      <main className="pt-24 pb-28 px-4 max-w-lg mx-auto w-full overflow-x-hidden">
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && (
             <motion.div 
@@ -522,11 +532,11 @@ export default function App() {
                       <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center flex-shrink-0">
                         <Package className="w-7 h-7 text-gray-500" />
                       </div>
-                      <div className="flex-1 min-w-0 py-1">
+                      <div className="flex-1 min-w-0 py-1 flex flex-col justify-center">
                         <div className="flex justify-between items-start gap-2">
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-sm leading-tight text-white truncate">{p.nombre}</h4>
-                            <p className="text-[10px] text-gray-500 mt-0.5">SKU: {p.sku}</p>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-bold text-sm leading-tight text-white truncate max-w-full">{p.nombre}</h4>
+                            <p className="text-[10px] text-gray-500 mt-1">SKU: {p.sku}</p>
                           </div>
                           <div className="flex gap-1">
                             <button 
